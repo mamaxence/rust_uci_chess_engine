@@ -9,6 +9,8 @@ mod board{
     use std::ops::{Index, IndexMut};
     use std::fmt;
     use std::fmt::Formatter;
+    use ansi_term::Color::{Blue,Green};
+    use crate::main;
 
     #[derive(Debug, Copy, Clone)]
     enum Color{
@@ -25,13 +27,32 @@ mod board{
         Knights,
         Pawns,
     }
+    impl fmt::Display for PieceKind{
+        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+            match self {
+                King => {write!(f, "X")}
+                Queen => {write!(f, "Q")}
+                Rooks => {write!(f, "R")}
+                Bishops => {write!(f, "B")}
+                Knights => {write!(f, "K")}
+                Pawns => {write!(f, "P")}
+            }
+        }
+    }
 
     #[derive(Debug, Copy, Clone)]
     struct Piece{
         kind: PieceKind,
         color: Color,
     }
-
+    impl fmt::Display for Piece{
+        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+            match self.color {
+                White => {write!(f, "{}", Green.paint(self.kind.to_string()).to_string())}
+                Black => {write!(f, "{}", Blue.paint(self.kind.to_string()).to_string())}
+            }
+        }
+    }
 
     #[derive(Debug, Copy, Clone)]
     struct Board{
@@ -61,10 +82,27 @@ mod board{
             &mut self.board[index]
         }
     }
+    impl fmt::Display for Board{
+        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+            let mut str = String::new();
+            for l in (0..8).rev(){
+                str.push_str(format!("{} ", l+1).as_str());
+                for c in 0..8{
+                    match self[c + l*8] {
+                        Some(piece) => str.push_str(piece.to_string().as_str()),
+                        None => str.push_str(".")
+                    }
+                }
+                str.push_str("\n");
+            }
+            str.push_str("  abcdefg");
+            write!(f, "{}", str.to_string())
+        }
+    }
     impl Board{
         /// Create a new board with no pieces.
         fn new_empty_board() -> Self{
-            Board{board: [Some(Piece{ kind: PieceKind::King, color: Color::White}); 64]}
+            Board{board: [None; 64]}
         }
 
         /// Create a new  board with starting position.
@@ -104,8 +142,10 @@ mod board{
         fn debug_board(){
             let empty_board = Board::new_empty_board();
             println!("{:?}", empty_board);
+            println!("{}", empty_board);
             let board = Board::new_board();
             println!("{:?}", board);
+            println!("{}", board);
         }
     }
 }
