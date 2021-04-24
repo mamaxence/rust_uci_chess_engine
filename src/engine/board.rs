@@ -40,11 +40,11 @@ impl FromStr for Castle{
 }
 
 #[derive(Debug, Copy, Clone)]
-struct ParseCaseError;
+pub struct ParseCaseError;
 
 /// Represent a case of the chessboard
 #[derive(Debug, Copy, Clone)]
-struct Case(usize);
+pub struct Case(usize);
 impl FromStr for Case{
     type Err = ParseCaseError;
 
