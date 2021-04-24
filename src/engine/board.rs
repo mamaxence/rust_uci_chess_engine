@@ -2,11 +2,107 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{Index, IndexMut};
 use std::str::FromStr;
-use std::string::ParseError;
-use crate::engine::piece::Piece;
+use crate::engine::piece::{Piece, Color, PieceParseError};
+use crate::engine::piece::Color::White;
+use std::num::ParseIntError;
+
+#[derive(Debug, Copy, Clone)]
+pub struct ParseCastleError;
+
+/// Represent the available castle move in a game
+#[derive(Debug, Copy, Clone)]
+pub struct Castle{
+    white_king: bool,
+    white_queen: bool,
+    black_king: bool,
+    black_queen: bool
+}
+impl FromStr for Castle{
+    type Err = ParseCastleError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut castle = Castle{white_king: false, white_queen: false, black_king: false, black_queen: false};
+        if s == "-"{
+            Ok(castle)
+        }else{
+            for car in s.chars(){
+                match car {
+                    'K' => castle.white_king = true,
+                    'Q' => castle.white_queen = true,
+                    'k' => castle.black_king= true,
+                    'q' => castle.black_queen = true,
+                    _ => {return Err(ParseCastleError)}
+                };
+            }
+            Ok(castle)
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct ParseCaseError;
+
+/// Represent a case of the chessboard
+#[derive(Debug, Copy, Clone)]
+struct Case(usize);
+impl FromStr for Case{
+    type Err = ParseCaseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let chars:Vec<char> = s.chars().collect();
+        if chars.len() != 2{
+            return Err(ParseCaseError)
+        }
+
+        let col = match chars[0] {  // match col
+            'a' => 0,
+            'b' => 1,
+            'c' => 2,
+            'd' => 3,
+            'e' => 4,
+            'f' => 5,
+            'g' => 6,
+            'h' => 7,
+            _ => {return Err(ParseCaseError);}
+        };
+        let line = match chars[1] { // match line
+            '1' => 0,
+            '2' => 1,
+            '3' => 2,
+            '4' => 3,
+            '5' => 4,
+            '6' => 5,
+            '7' => 6,
+            '8' => 7,
+            _ => {return Err(ParseCaseError);}
+        };
+
+        Ok(Case(col + line*8))
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct BoardParseError;
+impl From<ParseCastleError> for BoardParseError{
+    fn from(_: ParseCastleError) -> Self {
+        BoardParseError
+    }
+}
+impl From<ParseCaseError> for BoardParseError{
+    fn from(_: ParseCaseError) -> Self {
+        BoardParseError
+    }
+}
+impl From<ParseIntError> for BoardParseError{
+    fn from(_: ParseIntError) -> Self {
+        BoardParseError
+    }
+}
+impl From<PieceParseError> for BoardParseError{
+    fn from(_: PieceParseError) -> Self {
+        BoardParseError
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct Board{
@@ -25,6 +121,16 @@ pub struct Board{
     ///        a  b  c  d  e  f  g  h
     /// ```
     board: [Option<Piece>; 64],
+    /// The next side to play
+    side: Color,
+    /// Castle available
+    castle: Castle,
+    /// Available 'en passant' if any
+    en_passant: Option<Case>,
+    /// number of half move since last capture of pawn advance
+    halfmove: u32,
+    /// number of move in the game
+    moves: u32,
 }
 impl Index<usize> for Board{
     type Output = Option<Piece>;
@@ -58,23 +164,51 @@ impl fmt::Display for Board{
 /// Board can be loaded from a fen representation:
 /// (https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation)
 impl FromStr for Board{
-    type Err = ParseError;
+    type Err = BoardParseError;
 
     fn from_str(fen: &str) -> Result<Self, Self::Err> {
         let mut board = Board::new_empty_board();
-
         let split_fen: Vec<&str> = fen.split(' ').collect();
+
+        if split_fen.len() != 6{
+            return Err(BoardParseError);
+        }
+
+        // parse fen position
         for (l, line) in split_fen[0].split('/').enumerate(){
             let mut col: usize = 0;
             for car in line.chars(){
                 if let Some(num) = car.to_digit(10) {
                     col += num as usize
                 } else{
-                    board[col + 8*(7-l as usize)] = Some(format!("{}", car).parse().unwrap());
+                    board[col + 8*(7-l as usize)] = Some(format!("{}", car).parse()?);
                     col += 1;
                 }
             }
         }
+
+        // parse side
+        match split_fen[1]{
+            "w" => board.side = White,
+            "b" => board.side = White,
+            _ => return Err(BoardParseError)
+        }
+
+        // parse castle
+        board.castle = split_fen[2].parse()?;
+
+        // parse 'en passant'
+        if split_fen[3] == "-"{
+            board.en_passant = None
+        } else{
+            board.en_passant = Some(split_fen[3].parse()?)
+        }
+
+        // parse halfmove
+        board.halfmove = split_fen[4].parse()?;
+
+        // parse move
+        board.moves = split_fen[5].parse()?;
 
         Ok(board)
     }
@@ -82,7 +216,12 @@ impl FromStr for Board{
 impl Board{
     /// Create a new board with no pieces.
     pub fn new_empty_board() -> Self{
-        Board{board: [None; 64]}
+        Board{board: [None; 64],
+            side:White,
+            castle: "QKqk".parse().unwrap(),
+            en_passant:None,
+            halfmove:0,
+            moves:0}
     }
 
     /// Create a new  board with starting position.
@@ -169,7 +308,7 @@ mod tests{
         println!("{}", Board::new_from_fen(fen));
         assert_eq!(Board::new_from_fen(fen).to_string(), expected);
 
-    fen = "r3r1k1/pp3nPp/1b1p1B2/1q1P1N2/8/P4Q2/1P3PK1/R6R";
+    fen = "r3r1k1/pp3nPp/1b1p1B2/1q1P1N2/8/P4Q2/1P3PK1/R6R b KQkq - 1 2";
         expected = "\
 8 r...r.k.
 7 pp...nPp
