@@ -1,6 +1,5 @@
 use std::io;
-
-mod board;
+mod engine;
 
 fn main() {
     let stdin = io::stdin();
@@ -40,7 +39,8 @@ mod uci_parser {
         ()
     }
 
-    use crate::board::Board;
+    use crate::engine::board::Board;
+
     pub fn parse_position(details: &[&str]){
         let board:Board = match details[0]{
             "startpos"=> Board::new_board(),
