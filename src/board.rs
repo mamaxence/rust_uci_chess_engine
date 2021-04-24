@@ -1,9 +1,10 @@
-use crate::board::PieceKind::{Rooks, Knights, Bishops, Queen, King, Pawns};
-use crate::board::Color::{White, Black};
-use std::ops::{Index, IndexMut};
 use std::fmt;
 use std::fmt::Formatter;
-use crate::main;
+use std::ops::{Index, IndexMut};
+use std::str::FromStr;
+use std::string::ParseError;
+use crate::board::PieceKind::{King, Queen, Rook, Bishop, Knight, Pawn};
+use crate::board::Color::{White, Black};
 
 #[derive(Debug, Copy, Clone)]
 pub enum Color{
@@ -15,20 +16,21 @@ pub enum Color{
 pub enum PieceKind{
     King,
     Queen,
-    Rooks,
-    Bishops,
-    Knights,
-    Pawns,
+    Rook,
+    Bishop,
+    Knight,
+    Pawn,
 }
+
 impl fmt::Display for PieceKind{
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             King => {write!(f, "k")}
             Queen => {write!(f, "q")}
-            Rooks => {write!(f, "r")}
-            Bishops => {write!(f, "b")}
-            Knights => {write!(f, "n")}
-            Pawns => {write!(f, "p")}
+            Rook => {write!(f, "r")}
+            Bishop => {write!(f, "b")}
+            Knight => {write!(f, "n")}
+            Pawn => {write!(f, "p")}
         }
     }
 }
@@ -38,14 +40,40 @@ pub struct Piece{
     kind: PieceKind,
     color: Color,
 }
+
 impl fmt::Display for Piece{
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.color {
-            White => {write!(f, "{}", self.kind.to_string())}
-            Black => {write!(f, "{}", self.kind.to_string().to_uppercase())}
+            White => {write!(f, "{}", self.kind.to_string().to_uppercase())}
+            Black => {write!(f, "{}", self.kind.to_string())}
         }
     }
 }
+
+impl FromStr for Piece{
+    type Err = BoardParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "K" => Ok(Piece{kind:King, color:White}),
+            "Q" => Ok(Piece{kind:Queen, color:White}),
+            "R" => Ok(Piece{kind:Rook, color:White}),
+            "B" => Ok(Piece{kind:Bishop, color:White}),
+            "N" => Ok(Piece{kind:Knight, color:White}),
+            "P" => Ok(Piece{kind:Pawn, color:White}),
+            "k" => Ok(Piece{kind:King, color:Black}),
+            "q" => Ok(Piece{kind:Queen, color:Black}),
+            "r" => Ok(Piece{kind:Rook, color:Black}),
+            "b" => Ok(Piece{kind:Bishop, color:Black}),
+            "n" => Ok(Piece{kind:Knight, color:Black}),
+            "p" => Ok(Piece{kind:Pawn, color:Black}),
+            _ => Err(BoardParseError)
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct BoardParseError;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Board{
@@ -83,13 +111,37 @@ impl fmt::Display for Board{
             for c in 0..8{
                 match self[c + l*8] {
                     Some(piece) => str.push_str(piece.to_string().as_str()),
-                    None => str.push_str(".")
+                    None => str.push('.')
                 }
             }
-            str.push_str("\n");
+            str.push('\n');
         }
         str.push_str("  abcdefgh");
-        write!(f, "{}", str.to_string())
+        write!(f, "{}", str)
+    }
+}
+/// Board can be loaded from a fen representation:
+/// (https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation)
+impl FromStr for Board{
+    type Err = ParseError;
+
+    fn from_str(fen: &str) -> Result<Self, Self::Err> {
+        let mut board = Board::new_empty_board();
+
+        let split_fen: Vec<&str> = fen.split(' ').collect();
+        for (l, line) in split_fen[0].split('/').enumerate(){
+            let mut col: usize = 0;
+            for car in line.chars(){
+                if let Some(num) = car.to_digit(10) {
+                    col += num as usize
+                } else{
+                    board[col + 8*(7-l as usize)] = Some(format!("{}", car).parse().unwrap());
+                    col += 1;
+                }
+            }
+        }
+
+        Ok(board)
     }
 }
 impl Board{
@@ -100,41 +152,17 @@ impl Board{
 
     /// Create a new  board with starting position.
     pub fn new_board() -> Self{
-        let mut board = Board::new_empty_board();
-        board[0] = Some(Piece{kind:Rooks, color:White});
-        board[1] = Some(Piece{kind:Knights, color:White});
-        board[2] = Some(Piece{kind:Bishops, color:White});
-        board[3] = Some(Piece{kind:Queen, color:White});
-        board[4] = Some(Piece{kind:King, color:White});
-        board[5] = Some(Piece{kind:Bishops, color:White});
-        board[6] = Some(Piece{kind:Knights, color:White});
-        board[7] = Some(Piece{kind:Rooks, color:White});
-        for i in 8..16 {
-            board[i] = Some(Piece{kind:Pawns, color:White});
-        }
-        for i in 48..56 {
-            board[i] = Some(Piece{kind:Pawns, color: Black });
-        }
-        board[56] = Some(Piece{kind:Rooks, color: Black });
-        board[57] = Some(Piece{kind:Knights, color: Black });
-        board[58] = Some(Piece{kind:Bishops, color: Black });
-        board[59] = Some(Piece{kind:Queen, color: Black });
-        board[60] = Some(Piece{kind:King, color: Black });
-        board[61] = Some(Piece{kind:Bishops, color: Black });
-        board[62] = Some(Piece{kind:Knights, color: Black });
-        board[63] = Some(Piece{kind:Rooks, color: Black });
-        board
+        Board::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
     }
 
-    /// Create a new board from a fen notation
-    pub fn new_from_fen(fen: &str) -> Self {
-        Board::new_empty_board()
+    pub fn new_from_fen(fen: &str) -> Self{
+        fen.parse().unwrap()
     }
 }
 
 #[cfg(test)]
 mod tests{
-    use crate::board::{Board};
+    use crate::board::Board;
 
     #[test]
     fn debug_board(){
@@ -144,5 +172,78 @@ mod tests{
         let board = Board::new_board();
         println!("{:?}", board);
         println!("{}", board);
+    }
+
+    #[test]
+    fn fen_load(){
+        let mut fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        let mut expected = "\
+8 rnbqkbnr
+7 pppppppp
+6 ........
+5 ........
+4 ........
+3 ........
+2 PPPPPPPP
+1 RNBQKBNR
+  abcdefgh";
+        println!("{}", Board::new_from_fen(fen));
+        assert_eq!(Board::new_from_fen(fen).to_string(), expected);
+
+        fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+        expected = "\
+8 rnbqkbnr
+7 pppppppp
+6 ........
+5 ........
+4 ....P...
+3 ........
+2 PPPP.PPP
+1 RNBQKBNR
+  abcdefgh";
+        println!("{}", Board::new_from_fen(fen));
+        assert_eq!(Board::new_from_fen(fen).to_string(), expected);
+
+        fen = "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2";
+        expected = "\
+8 rnbqkbnr
+7 pp.ppppp
+6 ........
+5 ..p.....
+4 ....P...
+3 ........
+2 PPPP.PPP
+1 RNBQKBNR
+  abcdefgh";
+        println!("{}", Board::new_from_fen(fen));
+        assert_eq!(Board::new_from_fen(fen).to_string(), expected);
+
+        fen = "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
+        expected = "\
+8 rnbqkbnr
+7 pp.ppppp
+6 ........
+5 ..p.....
+4 ....P...
+3 .....N..
+2 PPPP.PPP
+1 RNBQKB.R
+  abcdefgh";
+        println!("{}", Board::new_from_fen(fen));
+        assert_eq!(Board::new_from_fen(fen).to_string(), expected);
+
+    fen = "r3r1k1/pp3nPp/1b1p1B2/1q1P1N2/8/P4Q2/1P3PK1/R6R";
+        expected = "\
+8 r...r.k.
+7 pp...nPp
+6 .b.p.B..
+5 .q.P.N..
+4 ........
+3 P....Q..
+2 .P...PK.
+1 R......R
+  abcdefgh";
+        println!("{}", Board::new_from_fen(fen));
+        assert_eq!(Board::new_from_fen(fen).to_string(), expected);
     }
 }

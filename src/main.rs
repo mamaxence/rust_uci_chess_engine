@@ -9,13 +9,12 @@ fn main() {
         stdin.read_line(&mut input).unwrap();
         uci_parser::parse_line(&input);
     }
-    println!("Hello, world!");
 }
 
 mod uci_parser {
 
-    pub fn parse_line(line: &String){
-        let split_line: Vec<&str> = line[..(line.len()-1)].split(" ").collect();
+    pub fn parse_line(line: &str){
+        let split_line: Vec<&str> = line[..(line.len()-1)].split(' ').collect();
         if split_line.is_empty() {
             eprintln!("Empty input!")
         }
@@ -45,7 +44,7 @@ mod uci_parser {
     pub fn parse_position(details: &[&str]){
         let board:Board = match details[0]{
             "startpos"=> Board::new_board(),
-            fen=> Board::new_empty_board(),
+            fen=> Board::new_from_fen(fen),
         };
         eprintln!("created board:\n{}", board)
     }
