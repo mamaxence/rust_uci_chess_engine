@@ -4,15 +4,14 @@ use std::str::FromStr;
 use crate::engine::piece::PieceKind::{King, Queen, Rook, Bishop, Knight, Pawn};
 use crate::engine::piece::Color::{White, Black};
 
-#[derive(Debug, Copy, Clone)]
-pub struct PieceParseError;
-
+/// Color of a piece
 #[derive(Debug, Copy, Clone)]
 pub enum Color{
     White,
     Black,
 }
 
+/// Kind of a piece
 #[derive(Debug, Copy, Clone)]
 pub enum PieceKind{
     King,
@@ -50,6 +49,10 @@ impl fmt::Display for Piece{
         }
     }
 }
+
+/// Error returned when a piece can not be parse from a string
+#[derive(Debug, Copy, Clone)]
+pub struct PieceParseError;
 
 impl FromStr for Piece{
     type Err = PieceParseError;
