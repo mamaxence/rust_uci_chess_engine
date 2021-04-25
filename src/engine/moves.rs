@@ -1,9 +1,12 @@
-use crate::engine::board::Case;
+use crate::engine::board::{Case, ParseCaseError};
 use crate::engine::moves::SimpleKind::{Quiet, DoublePawnPush, KingCastle, QueenCastle};
 use crate::engine::moves::CaptureKind::{Simple, EnPassant};
 use crate::engine::moves::PromotionKind::{Knight, Bishop, Rook, Queen};
 use crate::engine::moves::MoveKind::{SimpleCapture, KnightCapturePromotion, BishopCapturePromotion, RookCapturePromotion, QueenCapturePromotion, KnightPromotion, BishopPromotion, RookPromotion, QueenPromotion, EnPassantCapture};
+use std::fmt;
+use std::str::FromStr;
 
+#[derive(Debug, Copy, Clone)]
 pub enum MoveKind{
     Quiet,
     DoublePawnPush,
@@ -125,7 +128,7 @@ impl Into<MoveKind> for MoveFlags{
             }
             MoveFlags {capture: true, promotion: true, kind} =>
             unsafe {
-                match self.kind.promotion{
+                match kind.promotion{
                     Knight => KnightCapturePromotion,
                     Bishop => BishopCapturePromotion,
                     Rook => RookCapturePromotion,
@@ -133,6 +136,14 @@ impl Into<MoveKind> for MoveFlags{
                 }
             }
         }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MoveParseError;
+impl From<ParseCaseError> for MoveParseError{
+    fn from(_: ParseCaseError) -> Self {
+        MoveParseError
     }
 }
 
@@ -154,5 +165,46 @@ impl Move{
     }
     pub fn get_kind(&self) -> MoveKind{
         self.flags.into()
+    }
+    pub fn set_kind(&mut self, kind: MoveKind){
+        self.flags = kind.into();
+    }
+}
+impl fmt::Display for Move{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}: {:?}", self.from, self.to, self.get_kind())
+    }
+}
+impl FromStr for Move{
+    type Err = MoveParseError;
+
+    /// Create a move from a string. Be carefull to add the move kind with the board
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let from: Case = s[0..2].parse()?;
+        let to: Case = s[2..4].parse()?;
+        if s.len() == 5{
+            match s.chars().collect::<Vec<char>>()[5] {
+                'q' => Ok(Move::new_move(from, to, MoveKind::QueenPromotion)),
+                'k' => Ok(Move::new_move(from, to, MoveKind::KnightPromotion)),
+                'b' => Ok(Move::new_move(from, to, MoveKind::BishopPromotion)),
+                'r' => Ok(Move::new_move(from, to, MoveKind::RookPromotion)),
+                _ => Err(MoveParseError)
+            }
+        } else{
+            Ok(Move::new_move(from, to, MoveKind::Quiet))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests{
+    use crate::engine::moves::Move;
+    use crate::engine::board::Case;
+    use crate::engine::moves::MoveKind::DoublePawnPush;
+
+    #[test]
+    fn test_print_move() {
+        let m1 = Move::new_move(Case::new_from_str("e2"), Case::new_from_str("e4"), DoublePawnPush);
+        println!("{}", m1)
     }
 }

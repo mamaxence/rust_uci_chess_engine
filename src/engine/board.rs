@@ -45,6 +45,15 @@ pub struct ParseCaseError;
 /// Represent a case of the chessboard
 #[derive(Debug, Copy, Clone)]
 pub struct Case(usize);
+impl Case{
+    pub fn new(place: usize) -> Case{
+        Case(place)
+    }
+
+    pub fn new_from_str(place: &str) -> Case{
+        place.parse().unwrap()
+    }
+}
 impl FromStr for Case{
     type Err = ParseCaseError;
 
@@ -78,6 +87,14 @@ impl FromStr for Case{
         };
 
         Ok(Case(col + line*8))
+    }
+}
+impl fmt::Display for Case{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let line = (self.0/8) + 1;
+        let col = self.0 % 8;
+        let col_names = ["a", "b", "c" ,"d" ,"e", "f", "g", "h"];
+        write!(f, "{}{}", col_names[col], line)
     }
 }
 
@@ -234,6 +251,7 @@ impl Board{
     pub fn new_from_fen(fen: &str) -> Self{
         fen.parse().unwrap()
     }
+
 }
 
 #[cfg(test)]
