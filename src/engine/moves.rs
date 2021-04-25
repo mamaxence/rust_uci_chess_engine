@@ -1,12 +1,13 @@
-use crate::engine::board::{Case, ParseCaseError};
+use crate::engine::board::{Case, ParseCaseError, Board};
 use crate::engine::moves::SimpleKind::{Quiet, DoublePawnPush, KingCastle, QueenCastle};
 use crate::engine::moves::CaptureKind::{Simple, EnPassant};
 use crate::engine::moves::PromotionKind::{Knight, Bishop, Rook, Queen};
 use crate::engine::moves::MoveKind::{SimpleCapture, KnightCapturePromotion, BishopCapturePromotion, RookCapturePromotion, QueenCapturePromotion, KnightPromotion, BishopPromotion, RookPromotion, QueenPromotion, EnPassantCapture};
 use std::fmt;
 use std::str::FromStr;
+use crate::engine::piece::{Piece, PieceKind};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum MoveKind{
     Quiet,
     DoublePawnPush,
@@ -154,9 +155,20 @@ pub struct Move{
     flags: MoveFlags,
 }
 impl Move{
-    pub fn new_move(from: Case, to: Case, kind: MoveKind) -> Self{
+
+    /// Create a new move
+    pub fn new(from: Case, to: Case, kind: MoveKind) -> Self{
         Move{from, to, flags: kind.into()}
     }
+
+    /// Create a new move from an uci move text representation and a board.
+    /// The board is needed for setting the move metadata
+    pub fn new_on_board(str: &str, board: &Board) -> Self{
+        let mut mv: Move = str.parse().unwrap();
+        mv.set_kind(mv.get_kind_on_board(board));
+        mv
+    }
+
     pub fn is_capture(&self) -> bool{
         self.flags.capture
     }
@@ -168,6 +180,107 @@ impl Move{
     }
     pub fn set_kind(&mut self, kind: MoveKind){
         self.flags = kind.into();
+    }
+
+
+    /// Get the kind of a move given only its start and end position and its promotion kind if any
+    /// This function assume the move is valid
+    pub fn get_kind_on_board(&self, board: &Board) -> MoveKind{
+        if self.is_promotion_on_board(board){
+            if self.is_capture_on_board(board) {
+                match self.get_kind() {
+                    MoveKind::QueenPromotion => MoveKind::QueenCapturePromotion,
+                    MoveKind::RookPromotion => MoveKind::RookCapturePromotion,
+                    MoveKind::KnightPromotion => MoveKind::KnightCapturePromotion,
+                    MoveKind::BishopPromotion => MoveKind::BishopCapturePromotion,
+                    _ => MoveKind::Quiet // should not append
+                }
+            }
+            else {
+                self.get_kind()
+            }
+        }else if self.is_capture_on_board(board){
+            MoveKind::SimpleCapture
+        }else if self.is_en_passant_on_board(board) {
+            MoveKind::EnPassantCapture
+        } else if self.is_king_rock_on_board(board){
+            MoveKind::KingCastle
+        } else if self.is_queen_rock_on_board(board){
+            MoveKind::QueenCastle
+        } else if self.is_double_pawn_on_board(board){
+            MoveKind::DoublePawnPush
+        } else{
+            MoveKind::Quiet
+        }
+    }
+
+    /// Is the move a capture ? // todo (check en passant)
+    fn is_capture_on_board(&self, board: &Board) -> bool{
+        match board[&self.to] {
+            None => false ,
+            Some(_) => true
+        }
+    }
+
+    /// Is the move a promotion ?
+    fn is_promotion_on_board(&self, board: &Board) -> bool{
+        match board[&self.from] {
+            None => false,
+            Some(Piece{kind: PieceKind::Pawn, color:_}) => self.to.get_line() == 0 || self.to.get_line() == 7,
+            Some(Piece{kind:_, color:_}) => false,
+        }
+    }
+
+    /// Is move a rock
+    fn is_queen_rock_on_board(&self, board: &Board) -> bool{
+        if let Some(Piece{kind: PieceKind::King, color:_}) = board[&self.from]{
+            match (self.from.get_line(), self.from.get_column(), self.to.get_line(), self.to.get_column()) {
+                (0, 4, 0, 2) => true, // white queen rock
+                (7, 4, 7, 2) => true, // back queen rock
+                (_, _, _, _) => false
+            }
+        }else {
+            false
+        }
+    }
+
+    /// Is move king rock
+    fn is_king_rock_on_board(&self, board: &Board) -> bool{
+        if let Some(Piece{kind: PieceKind::King, color:_}) = board[&self.from]{
+            match (self.from.get_line(), self.from.get_column(), self.to.get_line(), self.to.get_column()) {
+                (0, 4, 0, 6) => true, // white king rock
+                (7, 4, 7, 6) => true, // back king rock
+                (_, _, _, _) => false
+            }
+        }else {
+            false
+        }
+    }
+
+
+    /// Check if move is 'en passant'
+    fn is_en_passant_on_board(&self, board: &Board) -> bool{
+        if let Some(Piece{kind: PieceKind::Pawn, color:_}) = board[&self.from]{
+            match board.en_passant{
+                None => false,
+                Some(case) => case == self.to
+            }
+        }else {
+            false
+        }
+    }
+
+    /// Check if move is a double pawn push
+    fn is_double_pawn_on_board(&self, board: &Board) -> bool{
+        if let Some(Piece{kind: PieceKind::Pawn, color:_}) = board[&self.from]{
+            match (self.from.get_line(), self.to.get_line()) {
+                (1, 3) => true,
+                (6, 4) => true,
+                (_, _) => false
+            }
+        }else {
+            false
+        }
     }
 }
 impl fmt::Display for Move{
@@ -183,28 +296,51 @@ impl FromStr for Move{
         let from: Case = s[0..2].parse()?;
         let to: Case = s[2..4].parse()?;
         if s.len() == 5{
-            match s.chars().collect::<Vec<char>>()[5] {
-                'q' => Ok(Move::new_move(from, to, MoveKind::QueenPromotion)),
-                'k' => Ok(Move::new_move(from, to, MoveKind::KnightPromotion)),
-                'b' => Ok(Move::new_move(from, to, MoveKind::BishopPromotion)),
-                'r' => Ok(Move::new_move(from, to, MoveKind::RookPromotion)),
+            match s.chars().collect::<Vec<char>>()[4] {
+                'q' => Ok(Move::new(from, to, MoveKind::QueenPromotion)),
+                'n' => Ok(Move::new(from, to, MoveKind::KnightPromotion)),
+                'b' => Ok(Move::new(from, to, MoveKind::BishopPromotion)),
+                'r' => Ok(Move::new(from, to, MoveKind::RookPromotion)),
                 _ => Err(MoveParseError)
             }
         } else{
-            Ok(Move::new_move(from, to, MoveKind::Quiet))
+            Ok(Move::new(from, to, MoveKind::Quiet))
         }
     }
 }
 
 #[cfg(test)]
 mod tests{
-    use crate::engine::moves::Move;
-    use crate::engine::board::Case;
+    use crate::engine::moves::{Move, SimpleKind, MoveKind};
+    use crate::engine::board::{Case, Board};
     use crate::engine::moves::MoveKind::DoublePawnPush;
 
     #[test]
     fn test_print_move() {
-        let m1 = Move::new_move(Case::new_from_str("e2"), Case::new_from_str("e4"), DoublePawnPush);
+        let m1 = Move::new(Case::new_from_str("e2"), Case::new_from_str("e4"), DoublePawnPush);
         println!("{}", m1)
+    }
+
+    #[test]
+    fn test_move_creation_from_txt(){
+        // see https://lichess.org/editor/2p1k2r/p2P2P1/8/8/4Pp2/8/1P6/R3K3_w_-_-_0_1
+        let board = Board::new_from_fen("2p1k2r/p2P2P1/8/8/4Pp2/8/1P6/R3K3 w - e3 0 1");
+        println!("{}", board);
+
+        assert_eq!(Move::new_on_board("f4f3", &board).get_kind(), MoveKind::Quiet);
+        assert_eq!(Move::new_on_board("b2b4", &board).get_kind(), MoveKind::DoublePawnPush);
+        assert_eq!(Move::new_on_board("a7a5", &board).get_kind(), MoveKind::DoublePawnPush);
+        assert_eq!(Move::new_on_board("e8g8", &board).get_kind(), MoveKind::KingCastle);
+        assert_eq!(Move::new_on_board("e1c1", &board).get_kind(), MoveKind::QueenCastle);
+        assert_eq!(Move::new_on_board("a1a7", &board).get_kind(), MoveKind::SimpleCapture);
+        assert_eq!(Move::new_on_board("f4e3", &board).get_kind(), MoveKind::EnPassantCapture);
+        assert_eq!(Move::new_on_board("g7g8n", &board).get_kind(), MoveKind::KnightPromotion);
+        assert_eq!(Move::new_on_board("g7g8b", &board).get_kind(), MoveKind::BishopPromotion);
+        assert_eq!(Move::new_on_board("g7g8r", &board).get_kind(), MoveKind::RookPromotion);
+        assert_eq!(Move::new_on_board("g7g8q", &board).get_kind(), MoveKind::QueenPromotion);
+        assert_eq!(Move::new_on_board("d7c8n", &board).get_kind(), MoveKind::KnightCapturePromotion);
+        assert_eq!(Move::new_on_board("d7c8b", &board).get_kind(), MoveKind::BishopCapturePromotion);
+        assert_eq!(Move::new_on_board("d7c8r", &board).get_kind(), MoveKind::RookCapturePromotion);
+        assert_eq!(Move::new_on_board("d7c8q", &board).get_kind(), MoveKind::QueenCapturePromotion);
     }
 }

@@ -43,7 +43,7 @@ impl FromStr for Castle{
 pub struct ParseCaseError;
 
 /// Represent a case of the chessboard
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Case(usize);
 impl Case{
     pub fn new(place: usize) -> Case{
@@ -52,6 +52,16 @@ impl Case{
 
     pub fn new_from_str(place: &str) -> Case{
         place.parse().unwrap()
+    }
+
+    /// get the line of the case
+    pub fn get_line(&self) -> usize{
+        return (self.0)/8
+    }
+
+    /// get the column of the case
+    pub fn get_column(&self) -> usize{
+        return (self.0)%8
     }
 }
 impl FromStr for Case{
@@ -91,8 +101,8 @@ impl FromStr for Case{
 }
 impl fmt::Display for Case{
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let line = (self.0/8) + 1;
-        let col = self.0 % 8;
+        let line = self.get_line() + 1;
+        let col = self.get_column();
         let col_names = ["a", "b", "c" ,"d" ,"e", "f", "g", "h"];
         write!(f, "{}{}", col_names[col], line)
     }
@@ -143,7 +153,7 @@ pub struct Board{
     /// Castle available
     castle: Castle,
     /// Available 'en passant' if any
-    en_passant: Option<Case>,
+    pub(crate) en_passant: Option<Case>,
     /// number of half move since last capture of pawn advance
     halfmove: u32,
     /// number of move in the game
@@ -156,9 +166,21 @@ impl Index<usize> for Board{
         &self.board[index]
     }
 }
+impl Index<&Case> for Board{
+    type Output = Option<Piece>;
+
+    fn index(&self, case: &Case) -> &Self::Output {
+        &self.board[case.0]
+    }
+}
 impl IndexMut<usize> for Board{
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.board[index]
+    }
+}
+impl IndexMut<&Case> for Board{
+    fn index_mut(&mut self, case: &Case) -> &mut Self::Output {
+        &mut self.board[case.0]
     }
 }
 impl fmt::Display for Board{

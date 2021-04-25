@@ -37,8 +37,8 @@ impl fmt::Display for PieceKind{
 
 #[derive(Debug, Copy, Clone)]
 pub struct Piece{
-    kind: PieceKind,
-    color: Color,
+    pub kind: PieceKind,
+    pub color: Color,
 }
 
 impl fmt::Display for Piece{
