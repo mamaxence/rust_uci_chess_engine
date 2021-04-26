@@ -1,5 +1,5 @@
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{Formatter, Display};
 use std::str::FromStr;
 use crate::engine::piece::PieceKind::{King, Queen, Rook, Bishop, Knight, Pawn};
 use crate::engine::piece::Color::{White, Black};
@@ -9,6 +9,14 @@ use crate::engine::piece::Color::{White, Black};
 pub enum Color{
     White,
     Black,
+}
+impl Display for Color{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            White => write!(f, "w"),
+            Black => write!(f, "b")
+        }
+    }
 }
 
 /// Kind of a piece

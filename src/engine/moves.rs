@@ -325,8 +325,6 @@ mod tests{
     fn test_move_creation_from_txt(){
         // see https://lichess.org/editor/2p1k2r/p2P2P1/8/8/4Pp2/8/1P6/R3K3_w_-_-_0_1
         let board = Board::new_from_fen("2p1k2r/p2P2P1/8/8/4Pp2/8/1P6/R3K3 w - e3 0 1");
-        println!("{}", board);
-
         assert_eq!(Move::new_on_board("f4f3", &board).get_kind(), MoveKind::Quiet);
         assert_eq!(Move::new_on_board("b2b4", &board).get_kind(), MoveKind::DoublePawnPush);
         assert_eq!(Move::new_on_board("a7a5", &board).get_kind(), MoveKind::DoublePawnPush);
