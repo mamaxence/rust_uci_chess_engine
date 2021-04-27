@@ -20,7 +20,7 @@ impl Display for Color{
 }
 
 /// Kind of a piece
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum PieceKind{
     King,
     Queen,

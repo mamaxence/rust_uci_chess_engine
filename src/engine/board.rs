@@ -6,7 +6,7 @@ use crate::engine::piece::{Piece, Color, PieceParseError};
 use crate::engine::piece::Color::{White, Black};
 use std::num::ParseIntError;
 use crate::engine::moves::{Move, MoveKind};
-use crate::engine::piece::PieceKind::{Knight, Bishop, Rook, Queen};
+use crate::engine::piece::PieceKind::{Knight, Bishop, Rook, Queen, Pawn};
 
 #[derive(Debug, Copy, Clone)]
 pub struct ParseCastleError;
@@ -42,7 +42,7 @@ impl FromStr for Castle{
 }
 impl Display for Castle{
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if !(self.black_queen && self.black_king && self.white_queen && self.white_king) {
+        if !(self.black_queen || self.black_king || self.white_queen || self.white_king) {
             write!(f, "-")
         }else{
             let mut res = String::new();
@@ -423,6 +423,7 @@ impl Board{
     /// Apply a move and return a new board
     pub fn apply_move(&self, mv: &Move) -> Self{
         let mut new = self.clone();
+        new.en_passant = None;
         match mv.get_kind() {
             MoveKind::DoublePawnPush => {
                 new[&mv.to] = new[&mv.from];
@@ -438,6 +439,10 @@ impl Board{
                 // move the tower
                 let rock_target = &mv.to.get_neighbour(Dir::Left, 1).unwrap();
                 let rock_source = &mv.to.get_neighbour(Dir::Right, 1).unwrap();
+                match self.side {
+                    White => new.castle.white_king = false,
+                    Black => new.castle.black_king = false,
+                }
                 new[rock_target] = new[rock_source];
                 new[&mv.from] = None;
                 new[rock_source] = None;
@@ -447,6 +452,10 @@ impl Board{
                 // move the tower
                 let rock_target = &mv.to.get_neighbour(Dir::Right, 1).unwrap();
                 let rock_source = &mv.to.get_neighbour(Dir::Left, 2).unwrap();
+                match self.side {
+                    White => new.castle.white_queen = false,
+                    Black => new.castle.black_queen = false,
+                }
                 new[rock_target] = new[rock_source];
                 new[&mv.from] = None;
                 new[rock_source] = None;
@@ -498,9 +507,18 @@ impl Board{
                 new[&mv.from] = None;
             },
         }
-        match mv.is_capture(){
+        match mv.is_capture() || self[&mv.from].unwrap().kind == Pawn{
             true => new.halfmove = 0,
             false => new.halfmove += 1
+        };
+        if self[&mv.from].unwrap().kind == Rook {
+            match &mv.from.0 {
+                0 => new.castle.white_queen = false,
+                7 => new.castle.white_king = false,
+                56 => new.castle.black_queen = false,
+                63 => new.castle.black_king = false,
+                _ => {}
+            };
         };
         match self.side {
             Color::White => new.side = Color::Black,
@@ -600,29 +618,30 @@ mod tests{
 
     #[test]
     fn test_move_simple(){
-        // see https://lichess.org/editor/2p1k2r/p2P2P1/8/8/4Pp2/8/1P6/R3K3_w_-_-_0_1
-        let mut board = Board::new_from_fen("2p1k2r/p2P2P1/8/8/4Pp2/8/1P6/R3K3 w - e3 0 1");
-        println!("{}", board);
-
-        board = board.apply_move(&Move::new_on_board("f4f3", &board))
-            .apply_move(&Move::new_on_board("b2b4", &board));
-        //assert_eq!(board.en_passant, Case::new_from_str("b3"));
-        board =board.apply_move(&Move::new_on_board("a7a5", &board));
-//        assert_eq!(board.en_passant, Case::new_from_str("a6"));
-
-        println!("{}", board);
-
-        // assert_eq!(Move::new_on_board("e8g8", &board).get_kind(), MoveKind::KingCastle);
-        // assert_eq!(Move::new_on_board("e1c1", &board).get_kind(), MoveKind::QueenCastle);
-        // assert_eq!(Move::new_on_board("a1a7", &board).get_kind(), MoveKind::SimpleCapture);
-        // assert_eq!(Move::new_on_board("f4e3", &board).get_kind(), MoveKind::EnPassantCapture);
-        // assert_eq!(Move::new_on_board("g7g8n", &board).get_kind(), MoveKind::KnightPromotion);
-        // assert_eq!(Move::new_on_board("g7g8b", &board).get_kind(), MoveKind::BishopPromotion);
-        // assert_eq!(Move::new_on_board("g7g8r", &board).get_kind(), MoveKind::RookPromotion);
-        // assert_eq!(Move::new_on_board("g7g8q", &board).get_kind(), MoveKind::QueenPromotion);
-        // assert_eq!(Move::new_on_board("d7c8n", &board).get_kind(), MoveKind::KnightCapturePromotion);
-        // assert_eq!(Move::new_on_board("d7c8b", &board).get_kind(), MoveKind::BishopCapturePromotion);
-        // assert_eq!(Move::new_on_board("d7c8r", &board).get_kind(), MoveKind::RookCapturePromotion);
-        // assert_eq!(Move::new_on_board("d7c8q", &board).get_kind(), MoveKind::QueenCapturePromotion);
+        // see https://lichess.org/editor/4k2r/pPp3P1/8/1P6/5p2/8/1P2P3/R3K3_w_Qk_-_0_1
+        let mut board = Board::new_from_fen("4k2r/pPp3P1/8/1P6/5p2/8/1P2P3/R3K3 w Qk - 0 1");
+        assert_eq!(board.to_fen(), "4k2r/pPp3P1/8/1P6/5p2/8/1P2P3/R3K3 w Qk - 0 1");
+        board = board.apply_move(&Move::new_on_board("e2e4", &board));
+        assert_eq!(board.to_fen(), "4k2r/pPp3P1/8/1P6/4Pp2/8/1P6/R3K3 b Qk e3 0 1");
+        board = board.apply_move(&Move::new_on_board("f4e3", &board));
+        assert_eq!(board.to_fen(), "4k2r/pPp3P1/8/1P6/8/4p3/1P6/R3K3 w Qk - 0 2");
+        board = board.apply_move(&Move::new_on_board("e1c1", &board));
+        assert_eq!(board.to_fen(), "4k2r/pPp3P1/8/1P6/8/4p3/1P6/2KR4 b k - 1 2");
+        board = board.apply_move(&Move::new_on_board("h8g8", &board));
+        assert_eq!(board.to_fen(), "4k1r1/pPp3P1/8/1P6/8/4p3/1P6/2KR4 w - - 2 3");
+        board = board.apply_move(&Move::new_on_board("b7b8b", &board));
+        assert_eq!(board.to_fen(), "1B2k1r1/p1p3P1/8/1P6/8/4p3/1P6/2KR4 b - - 0 3");
+        board = board.apply_move(&Move::new_on_board("g8g7", &board));
+        assert_eq!(board.to_fen(), "1B2k3/p1p3r1/8/1P6/8/4p3/1P6/2KR4 w - - 0 4");
+        board = board.apply_move(&Move::new_on_board("b5b6", &board));
+        assert_eq!(board.to_fen(), "1B2k3/p1p3r1/1P6/8/8/4p3/1P6/2KR4 b - - 0 4");
+        board = board.apply_move(&Move::new_on_board("g7h7", &board));
+        assert_eq!(board.to_fen(), "1B2k3/p1p4r/1P6/8/8/4p3/1P6/2KR4 w - - 1 5");
+        board = board.apply_move(&Move::new_on_board("b6a7", &board));
+        assert_eq!(board.to_fen(), "1B2k3/P1p4r/8/8/8/4p3/1P6/2KR4 b - - 0 5");
+        board = board.apply_move(&Move::new_on_board("h7h8", &board));
+        assert_eq!(board.to_fen(), "1B2k2r/P1p5/8/8/8/4p3/1P6/2KR4 w - - 1 6");
+        board = board.apply_move(&Move::new_on_board("a7a8q", &board));
+        assert_eq!(board.to_fen(), "QB2k2r/2p5/8/8/8/4p3/1P6/2KR4 b - - 0 6");
     }
 }
