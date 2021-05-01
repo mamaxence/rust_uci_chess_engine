@@ -48,7 +48,7 @@ mod uci_parser {
             "startpos"=> *board = Board::new_board(),
             fen=> *board = Board::new_from_fen(fen),
         }
-        if details.len() >= 1{
+        if !details.is_empty(){
             for mv in details[2..details.len()].to_vec(){
                 println!("mv: {}", mv);
                 *board = board.apply_move(&mv.parse().unwrap());

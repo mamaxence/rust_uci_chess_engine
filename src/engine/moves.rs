@@ -216,10 +216,7 @@ impl Move{
 
     /// Is the move a capture ? // todo (check en passant)
     fn is_capture_on_board(&self, board: &Board) -> bool{
-        match board[&self.to] {
-            None => false ,
-            Some(_) => true
-        }
+        board[&self.to].is_some()
     }
 
     /// Is the move a promotion ?
