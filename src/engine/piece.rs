@@ -5,7 +5,7 @@ use crate::engine::piece::PieceKind::{King, Queen, Rook, Bishop, Knight, Pawn};
 use crate::engine::piece::Color::{White, Black};
 
 /// Color of a piece
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Color{
     White,
     Black,
@@ -15,6 +15,15 @@ impl Display for Color{
         match self {
             White => write!(f, "w"),
             Black => write!(f, "b")
+        }
+    }
+}
+impl Color{
+    /// Return an new inverted color
+    pub fn flip(&self) -> Color{
+        match self {
+            White => Black,
+            Black => White
         }
     }
 }

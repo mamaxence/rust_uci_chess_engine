@@ -6,7 +6,7 @@ use crate::engine::piece::{Piece, Color, PieceParseError};
 use crate::engine::piece::Color::{White, Black};
 use std::num::ParseIntError;
 use crate::engine::moves::{Move, MoveKind};
-use crate::engine::piece::PieceKind::{Knight, Bishop, Rook, Queen, Pawn};
+use crate::engine::piece::PieceKind::{Knight, Bishop, Rook, Queen, Pawn, King};
 
 #[derive(Debug, Copy, Clone)]
 pub struct ParseCastleError;
@@ -14,10 +14,10 @@ pub struct ParseCastleError;
 /// Represent the available castle move in a game
 #[derive(Debug, Copy, Clone)]
 pub struct Castle{
-    white_king: bool,
-    white_queen: bool,
-    black_king: bool,
-    black_queen: bool
+    pub white_king: bool,
+    pub white_queen: bool,
+    pub black_king: bool,
+    pub black_queen: bool
 }
 impl FromStr for Castle{
     type Err = ParseCastleError;
@@ -86,7 +86,7 @@ pub enum Dir{
 pub struct ParseCaseError;
 
 /// Represent a case of the chessboard
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Case(usize);
 impl Case{
     pub fn new(place: usize) -> Case{
@@ -142,19 +142,19 @@ impl Case{
                     Some(Case(self.0+7*distance))}
                 else {None},
             Dir::Cav1 =>
-                if self.get_line() < 7 && self.get_column() < 8 {
+                if self.get_line() < 6 && self.get_column() < 7 {
                     Some(Case(self.0+17))
                 } else {None}
             Dir::Cav2 =>
-                if self.get_line() < 8 && self.get_column() < 7 {
+                if self.get_line() < 7 && self.get_column() < 6 {
                     Some(Case(self.0+10))
                 } else {None}
             Dir::Cav4 =>
-                if self.get_line() >= 1 && self.get_column() < 7 {
+                if self.get_line() >= 1 && self.get_column() < 6 {
                     Some(Case(self.0-6))
                 } else {None}
             Dir::Cav5 =>
-                if self.get_line() >= 2 && self.get_column() < 8 {
+                if self.get_line() >= 2 && self.get_column() < 7 {
                     Some(Case(self.0-15))
                 } else {None}
             Dir::Cav7 =>
@@ -166,12 +166,12 @@ impl Case{
                     Some(Case(self.0-10))
                 } else {None}
             Dir::Cav10 =>
-                if self.get_line() < 8 && self.get_column() >= 2 {
-                    Some(Case(self.0-10))
+                if self.get_line() < 7 && self.get_column() >= 2 {
+                    Some(Case(self.0+6))
                 } else {None}
             Dir::Cav11 =>
-                if self.get_line() < 7 && self.get_column() >= 1 {
-                    Some(Case(self.0-10))
+                if self.get_line() < 6 && self.get_column() >= 1 {
+                    Some(Case(self.0+15))
                 } else {None}
         }
     }
@@ -261,9 +261,9 @@ pub struct Board{
     /// ```
     board: [Option<Piece>; 64],
     /// The next side to play
-    side: Color,
+    pub side: Color,
     /// Castle available
-    castle: Castle,
+    pub castle: Castle,
     /// Available 'en passant' if any
     pub(crate) en_passant: Option<Case>,
     /// number of half move since last capture of pawn advance
@@ -507,6 +507,10 @@ impl Board{
                 new[&mv.from] = None;
             },
         }
+        if self[&mv.from].is_none(){
+            println!("{}", mv);
+            println!("{}", self.to_fen())
+        }
         match mv.is_capture() || self[&mv.from].unwrap().kind == Pawn{
             true => new.halfmove = 0,
             false => new.halfmove += 1
@@ -519,7 +523,22 @@ impl Board{
                 63 => new.castle.black_king = false,
                 _ => {}
             };
+        } else if self[&mv.from].unwrap().kind == King{
+            match &mv.from.0 {
+                4 => {new.castle.white_queen = false; new.castle.white_king = false}
+                60 => {new.castle.black_king = false; new.castle.black_queen = false}
+                _ => {}
+            };
         };
+        if mv.is_capture() {
+            match &mv.to.0 {
+                0 => new.castle.white_queen = false,
+                7 => new.castle.white_king = false,
+                56 => new.castle.black_queen = false,
+                63 => new.castle.black_king = false,
+                _ => {}
+            };
+        }
         match self.side {
             Color::White => new.side = Color::Black,
             Color::Black => {new.side = Color::White; new.moves += 1}
